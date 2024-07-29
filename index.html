@@ -101,39 +101,72 @@
             <button id="select-folder">Seleziona Cartella di Lavoro</button>
         </div>
         <ul id="file-list">
-            <!-- Elenco dei file verrà generato dinamicamente qui -->
+            <!-- Elenco dei file e delle cartelle verrà generato dinamicamente qui -->
         </ul>
         <div class="guide">
             <h3>Guida all'uso:</h3>
-            <p>Per visualizzare i file nella tua cartella di lavoro, segui questi semplici passaggi:</p>
+            <p>Per visualizzare i file e le cartelle nella tua cartella di lavoro, segui questi semplici passaggi:</p>
             <ol>
                 <li>Clicca sul pulsante "Seleziona Cartella di Lavoro".</li>
                 <li>Verrà aperta una finestra di dialogo: naviga fino alla cartella di lavoro sulla tua chiavetta USB e selezionala.</li>
-                <li>Dopo aver selezionato la cartella, verrà mostrato l'elenco dei file presenti. Puoi cliccare su ogni file per scaricarlo o visualizzarlo.</li>
+                <li>Puoi navigare tra le cartelle cliccando sui nomi delle cartelle nell'elenco. I file possono essere visualizzati cliccando sui loro nomi.</li>
             </ol>
             <p>Nota: Questo gestionale funziona meglio con i browser basati su Chromium, come Google Chrome ed Edge, che supportano l'API File System Access.</p>
         </div>
     </div>
 
     <script>
+        let currentDirHandle = null;
+        let parentDirs = [];
+
         document.getElementById('select-folder').addEventListener('click', async () => {
-            const dirHandle = await window.showDirectoryPicker();
-            const fileList = document.getElementById('file-list');
-            fileList.innerHTML = ''; // Svuota l'elenco dei file
-            await listFiles(dirHandle);
+            currentDirHandle = await window.showDirectoryPicker();
+            parentDirs = [];
+            updateFileList();
         });
 
-        async function listFiles(dirHandle) {
-            for await (const entry of dirHandle.values()) {
+        async function updateFileList() {
+            const fileList = document.getElementById('file-list');
+            fileList.innerHTML = ''; // Svuota l'elenco dei file
+
+            if (parentDirs.length > 0) {
+                // Aggiunge un'opzione per tornare indietro
+                const backItem = document.createElement('li');
+                const backLink = document.createElement('a');
+                backLink.href = "#";
+                backLink.textContent = "⬅️ Torna indietro";
+                backLink.addEventListener('click', () => {
+                    currentDirHandle = parentDirs.pop();
+                    updateFileList();
+                });
+                backItem.appendChild(backLink);
+                fileList.appendChild(backItem);
+            }
+
+            for await (const entry of currentDirHandle.values()) {
+                const listItem = document.createElement('li');
+                const itemLink = document.createElement('a');
+
                 if (entry.kind === 'file') {
-                    const fileItem = document.createElement('li');
-                    const fileLink = document.createElement('a');
-                    fileLink.href = URL.createObjectURL(await entry.getFile());
-                    fileLink.textContent = entry.name;
-                    fileLink.download = entry.name;
-                    fileItem.appendChild(fileLink);
-                    document.getElementById('file-list').appendChild(fileItem);
+                    itemLink.href = "#";
+                    itemLink.textContent = entry.name;
+                    itemLink.addEventListener('click', async () => {
+                        const file = await entry.getFile();
+                        const fileURL = URL.createObjectURL(file);
+                        window.open(fileURL);
+                    });
+                } else if (entry.kind === 'directory') {
+                    itemLink.href = "#";
+                    itemLink.textContent = "📁 " + entry.name;
+                    itemLink.addEventListener('click', async () => {
+                        parentDirs.push(currentDirHandle);
+                        currentDirHandle = await currentDirHandle.getDirectoryHandle(entry.name);
+                        updateFileList();
+                    });
                 }
+
+                listItem.appendChild(itemLink);
+                fileList.appendChild(listItem);
             }
         }
     </script>
